@@ -196,3 +196,23 @@ def test_relatorio(tmp_path, db):
 
     texto = gerar_relatorio(db)
     assert "## VCP → REC" in texto and "**9.000** 🏆" in texto and "Alertas recentes" in texto
+
+
+def test_rotas_adicionar_e_remover(tmp_path):
+    from azul_monitor.rotas import adicionar_rota, remover_rota
+
+    arq = tmp_path / "monitores.json"
+    hoje = date(2026, 10, 1)
+    r = adicionar_rota(arq, "vcp", "rec", "20/12/2026", "", "15.000", "", True, hoje=hoje)
+    assert r["data_fim"] == "2026-12-20" and r["max_pontos"] == 15000 and r["somente_diretos"]
+    adicionar_rota(arq, "VCP", "REC", "2026-12-20", "", "12000", hoje=hoje)  # atualiza a mesma
+    adicionar_rota(arq, "GRU", "SSA", "01/12/2026", "05/12/2026", hoje=hoje)
+    import json as _json
+    rotas = _json.loads(arq.read_text())
+    assert [r["origem"] for r in rotas] == ["VCP", "GRU"] and rotas[0]["max_pontos"] == 12000
+    for invalido in [("VC", "REC", "20/12/2026"), ("VCP", "VCP", "20/12/2026"),
+                     ("VCP", "REC", "31/02/2026"), ("VCP", "REC", "01/01/2026")]:
+        with pytest.raises(ValueError):
+            adicionar_rota(arq, *invalido, hoje=hoje)
+    assert remover_rota(arq, "vcp", "rec") == 1
+    assert [r["origem"] for r in _json.loads(arq.read_text())] == ["GRU"]

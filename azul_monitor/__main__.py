@@ -19,6 +19,7 @@ from .db import Database
 from .monitor import Verificador
 from .providers import criar_provedor
 from .relatorio import gerar_relatorio
+from .rotas import adicionar_rota, remover_rota
 
 
 def main() -> None:
@@ -38,6 +39,17 @@ def main() -> None:
     p_verificar.add_argument(
         "--arquivo", help="JSON com a lista de monitores (substitui os monitores ativos do banco)"
     )
+
+    p_rota = sub.add_parser("rota", help="Adiciona ou remove uma rota de monitores.json")
+    p_rota.add_argument("acao", choices=["adicionar", "remover"])
+    p_rota.add_argument("--arquivo", default="monitores.json")
+    p_rota.add_argument("--origem", required=True)
+    p_rota.add_argument("--destino", required=True)
+    p_rota.add_argument("--data-inicio", default="", help="DD/MM/AAAA")
+    p_rota.add_argument("--data-fim", default="", help="DD/MM/AAAA (padrão: igual à inicial)")
+    p_rota.add_argument("--max-pontos", default="")
+    p_rota.add_argument("--desconto", default="", help="%% abaixo da média para alertar (padrão 20)")
+    p_rota.add_argument("--somente-diretos", default="false")
 
     p_relatorio = sub.add_parser("relatorio", help="Gera um relatório em Markdown")
     p_relatorio.add_argument("--saida", help="Arquivo de saída (padrão: imprime na tela)")
@@ -76,6 +88,23 @@ def main() -> None:
                 verificador.verificar(monitor)
         finally:
             provedor.fechar()
+    elif args.comando == "rota":
+        caminho = Path(args.arquivo)
+        try:
+            if args.acao == "adicionar":
+                if not args.data_inicio.strip():
+                    raise ValueError("Informe a data inicial.")
+                rota = adicionar_rota(
+                    caminho, args.origem, args.destino, args.data_inicio, args.data_fim,
+                    args.max_pontos, args.desconto, args.somente_diretos.lower() in ("true", "1", "sim"),
+                )
+                print(f"Rota adicionada: {rota['origem']} → {rota['destino']}, "
+                      f"{rota['data_inicio']} a {rota['data_fim']}")
+            else:
+                n = remover_rota(caminho, args.origem, args.destino, args.data_inicio)
+                print(f"{n} rota(s) removida(s).")
+        except ValueError as e:
+            raise SystemExit(f"Erro: {e}")
     elif args.comando == "relatorio":
         texto = gerar_relatorio(Database(config.db_path))
         if args.saida:

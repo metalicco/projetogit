@@ -58,17 +58,20 @@ servidor ou numa VPS, ou agende `python -m azul_monitor verificar` no cron.
 O workflow `.github/workflows/monitor.yml` roda a verificação no GitHub Actions a cada 3
 horas. A interface web não roda no GitHub; no lugar dela há um relatório em Markdown.
 
-1. **Escolha as rotas** editando `monitores.json` (pode ser direto no site do GitHub, no ícone
-   de lápis). Cada item é um monitor:
+1. **Cadastre as rotas pelo formulário.** Na aba *Actions*, escolha *Monitor de passagens
+   Azul* e clique em *Run workflow*. Abre um formulário com:
+   - **O que fazer:** adicionar rota, remover rota ou só verificar os preços;
+   - **Origem** e **destino** (código do aeroporto, ex.: VCP, REC);
+   - **Ida a partir de** e **ida até** (DD/MM/AAAA);
+   - **Alertar se custar até** (pontos) e **% abaixo da média**;
+   - **Só voos diretos**.
 
-   ```json
-   [
-     {"origem": "VCP", "destino": "REC", "data_inicio": "2026-12-15", "data_fim": "2026-12-22",
-      "max_pontos": 15000, "desconto_minimo_pct": 20, "somente_diretos": false}
-   ]
-   ```
+   Ao clicar no botão verde *Run workflow*, a rota é salva em `monitores.json` e os preços são
+   verificados na hora. Funciona também no app do GitHub no celular. Para remover, use
+   *Remover rota* com origem e destino (e a data inicial, se houver mais de um período).
 
-   Monitores removidos do arquivo são pausados (o histórico é mantido).
+   Também dá para editar `monitores.json` direto (ícone de lápis). Monitores removidos do
+   arquivo são pausados (o histórico é mantido).
 
 2. **Configure os alertas** em *Settings → Secrets and variables → Actions → New repository
    secret*. Use os mesmos nomes do `.env.example`: `TELEGRAM_TOKEN` e `TELEGRAM_CHAT_ID`,
@@ -126,6 +129,7 @@ azul_monitor/
   monitor.py         verificação dos monitores e regra de "bom preço"
   alertas.py         Telegram, e-mail, ntfy
   relatorio.py       relatório em Markdown (usado no GitHub)
+  rotas.py           edição de monitores.json (formulário do GitHub)
   db.py              SQLite: monitores, histórico de preços, alertas
   providers/
     azul.py          consulta ao site da Azul (Playwright)

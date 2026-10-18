@@ -4,7 +4,40 @@ on:
   schedule:
     # A cada 3 horas (horário UTC; minuto 17 para fugir do pico do GitHub).
     - cron: "17 */3 * * *"
-  workflow_dispatch: # botão "Run workflow" na aba Actions
+  # Formulário do botão "Run workflow" na aba Actions.
+  workflow_dispatch:
+    inputs:
+      acao:
+        description: "O que fazer"
+        type: choice
+        options:
+          - Adicionar rota e verificar
+          - Remover rota
+          - Só verificar os preços
+        default: Adicionar rota e verificar
+      origem:
+        description: "Origem (código do aeroporto, ex.: VCP)"
+        required: false
+      destino:
+        description: "Destino (código do aeroporto, ex.: REC)"
+        required: false
+      data_inicio:
+        description: "Ida a partir de (DD/MM/AAAA)"
+        required: false
+      data_fim:
+        description: "Ida até (DD/MM/AAAA; vazio = só a data inicial)"
+        required: false
+      max_pontos:
+        description: "Alertar se custar até (pontos; vazio = só pela média)"
+        required: false
+      desconto:
+        description: "Ou se estiver X% abaixo da média"
+        required: false
+        default: "20"
+      somente_diretos:
+        description: "Só voos diretos"
+        type: boolean
+        default: false
 
 permissions:
   contents: write # para salvar o histórico de preços no repositório
@@ -44,7 +77,33 @@ jobs:
           pip install -r requirements.txt
           python -m playwright install --with-deps chromium
 
+      - name: Atualizar rotas
+        if: github.event_name == 'workflow_dispatch' && inputs.acao != 'Só verificar os preços'
+        env:
+          ACAO: ${{ inputs.acao }}
+          ORIGEM: ${{ inputs.origem }}
+          DESTINO: ${{ inputs.destino }}
+          DATA_INICIO: ${{ inputs.data_inicio }}
+          DATA_FIM: ${{ inputs.data_fim }}
+          MAX_PONTOS: ${{ inputs.max_pontos }}
+          DESCONTO: ${{ inputs.desconto }}
+          SOMENTE_DIRETOS: ${{ inputs.somente_diretos }}
+        run: |
+          if [ "$ACAO" = "Remover rota" ]; then
+            python -m azul_monitor rota remover --origem "$ORIGEM" --destino "$DESTINO" \
+              --data-inicio "$DATA_INICIO"
+          else
+            python -m azul_monitor rota adicionar --origem "$ORIGEM" --destino "$DESTINO" \
+              --data-inicio "$DATA_INICIO" --data-fim "$DATA_FIM" --max-pontos "$MAX_PONTOS" \
+              --desconto "$DESCONTO" --somente-diretos "$SOMENTE_DIRETOS"
+          fi
+          echo '### Rotas monitoradas' >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat monitores.json >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
       - name: Verificar preços
+        if: github.event_name != 'workflow_dispatch' || inputs.acao != 'Remover rota'
         run: python -m azul_monitor verificar --arquivo monitores.json
 
       - name: Gerar relatório
@@ -58,12 +117,12 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add dados/
+          git add dados/ monitores.json
           if git diff --cached --quiet; then
             echo "Nada a salvar."
             exit 0
           fi
-          git commit -m "Atualiza preços das passagens [skip ci]"
+          git commit -m "Atualiza rotas e preços das passagens [skip ci]"
           for tentativa in 1 2 3; do
             git pull --rebase -X theirs origin "$GITHUB_REF_NAME" && git push && exit 0
             sleep $((tentativa * 5))
