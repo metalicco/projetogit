@@ -216,3 +216,22 @@ def test_rotas_adicionar_e_remover(tmp_path):
             adicionar_rota(arq, *invalido, hoje=hoje)
     assert remover_rota(arq, "vcp", "rec") == 1
     assert [r["origem"] for r in _json.loads(arq.read_text())] == ["GRU"]
+
+
+def test_desiste_cedo_quando_site_bloqueia(tmp_path, db):
+    from azul_monitor.providers.base import ErroProvedor
+
+    class Bloqueado:
+        chamadas = 0
+
+        def buscar(self, *a):
+            Bloqueado.chamadas += 1
+            raise ErroProvedor("bloqueado")
+
+        def fechar(self):
+            pass
+
+    m = novo_monitor(db, data_fim=HOJE + timedelta(days=9))
+    Verificador(db, Bloqueado(), NotificadorFalso(), config(tmp_path)).verificar(m)
+    assert Bloqueado.chamadas == 2
+    assert "não foram tentadas" in db.obter_monitor(m.id).ultimo_erro

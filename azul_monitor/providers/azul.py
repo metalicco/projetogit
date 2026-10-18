@@ -26,6 +26,11 @@ URL_BUSCA = (
     "&p[0].t=ADT&p[0].c=1&p[0].cp=false&f.dl=3&f.dr=3&cc=PTS"
 )
 
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
+
 # Respostas do site que podem conter a disponibilidade de voos.
 PADRAO_URL_DISPONIBILIDADE = re.compile(r"availab|disponib|journey|search", re.I)
 
@@ -152,8 +157,15 @@ def extrair_ofertas(dados: Any, origem: str, destino: str, data: date) -> list[O
     return sorted(melhores.values(), key=lambda of: of.pontos)
 
 
+def _titulo(pagina) -> str:
+    try:
+        return pagina.title()[:80]
+    except Exception:
+        return "?"
+
+
 class ProvedorAzul:
-    def __init__(self, headless: bool = True, debug_dir: str | None = None, timeout_s: int = 60):
+    def __init__(self, headless: bool = True, debug_dir: str | None = None, timeout_s: int = 45):
         self._headless = headless
         self._debug_dir = Path(debug_dir) if debug_dir else None
         self._timeout_ms = timeout_s * 1000
@@ -174,24 +186,33 @@ class ProvedorAzul:
 
     def buscar(self, origem: str, destino: str, data: date) -> list[Oferta]:
         browser = self._iniciar()
-        contexto = browser.new_context(locale="pt-BR", timezone_id="America/Sao_Paulo")
+        contexto = browser.new_context(
+            locale="pt-BR", timezone_id="America/Sao_Paulo", user_agent=USER_AGENT,
+            viewport={"width": 1366, "height": 900},
+        )
         respostas: list[Any] = []
+        requisicoes: list[str] = []  # para diagnóstico
 
         def ao_responder(resp):
-            if not PADRAO_URL_DISPONIBILIDADE.search(resp.url):
-                return
-            if "json" not in (resp.headers.get("content-type") or ""):
+            tipo = resp.headers.get("content-type") or ""
+            if resp.request.resource_type in ("xhr", "fetch", "document"):
+                requisicoes.append(f"{resp.status} {tipo.split(';')[0]} {resp.url[:200]}")
+            if "json" not in tipo or not PADRAO_URL_DISPONIBILIDADE.search(resp.url):
                 return
             try:
                 respostas.append(resp.json())
             except Exception:
                 pass
 
+        pagina = None
         try:
             pagina = contexto.new_page()
             pagina.on("response", ao_responder)
             url = URL_BUSCA.format(origem=origem, destino=destino, data=data.strftime("%m/%d/%Y"))
-            pagina.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+            principal = pagina.goto(url, wait_until="domcontentloaded", timeout=self._timeout_ms)
+            status = principal.status if principal else None
+            if status and status >= 400:
+                raise ErroProvedor(f"O site respondeu HTTP {status} ({_titulo(pagina)}): acesso bloqueado.")
             # Aguarda o carregamento dos voos (ou o tempo limite).
             limite = time.monotonic() + self._timeout_ms / 1000
             ofertas: list[Oferta] = []
@@ -202,22 +223,30 @@ class ProvedorAzul:
                     pagina.wait_for_timeout(2000)  # deixa chegar respostas complementares
                     ofertas = [o for r in respostas for o in extrair_ofertas(r, origem, destino, data)]
                     break
-            self._salvar_debug(origem, destino, data, respostas)
             if not respostas:
                 raise ErroProvedor(
-                    "O site não retornou dados de disponibilidade (possível bloqueio anti-robô "
-                    "ou mudança no site). Tente AZUL_HEADLESS=0."
+                    f"O site não retornou dados de voos (página: {_titulo(pagina)!r}, "
+                    f"{len(requisicoes)} requisições). Possível bloqueio anti-robô ou mudança no site."
                 )
             return _deduplicar(ofertas)
         finally:
+            self._salvar_debug(origem, destino, data, respostas, requisicoes, pagina)
             contexto.close()
 
-    def _salvar_debug(self, origem: str, destino: str, data: date, respostas: list[Any]) -> None:
+    def _salvar_debug(self, origem, destino, data, respostas, requisicoes, pagina) -> None:
         if not self._debug_dir:
             return
         self._debug_dir.mkdir(parents=True, exist_ok=True)
-        nome = f"{origem}-{destino}-{data.isoformat()}-{datetime.now():%Y%m%d%H%M%S}.json"
-        (self._debug_dir / nome).write_text(json.dumps(respostas, ensure_ascii=False, indent=2))
+        base = self._debug_dir / f"{origem}-{destino}-{data.isoformat()}-{datetime.now():%Y%m%d%H%M%S}"
+        info = {"url_final": None, "titulo": None, "requisicoes": requisicoes, "respostas": respostas}
+        if pagina is not None:
+            try:
+                info["url_final"], info["titulo"] = pagina.url, pagina.title()
+                pagina.screenshot(path=f"{base}.png", full_page=False)
+                Path(f"{base}.html").write_text(pagina.content()[:500_000], encoding="utf-8")
+            except Exception:
+                pass
+        Path(f"{base}.json").write_text(json.dumps(info, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def fechar(self) -> None:
         if self._browser:

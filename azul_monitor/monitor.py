@@ -14,6 +14,8 @@ from .providers import ErroProvedor, Oferta, Provedor
 log = logging.getLogger(__name__)
 
 MAX_DIAS_POR_MONITOR = 60
+# Se as primeiras buscas falharem seguidas, o site provavelmente está bloqueando: desiste cedo.
+MAX_FALHAS_SEGUIDAS_INICIAIS = 2
 
 
 @dataclass
@@ -89,8 +91,12 @@ class Verificador:
         media = self.db.media_historica(monitor.id, coletado_em)
         alertas = 0
         erros = []
+        sucessos = 0
         datas = datas_do_monitor(monitor)
         for i, dia in enumerate(datas):
+            if not sucessos and len(erros) >= MAX_FALHAS_SEGUIDAS_INICIAIS:
+                erros.append(f"As primeiras {len(erros)} buscas falharam; as outras datas não foram tentadas.")
+                break
             if i and self.config.pausa_entre_buscas:
                 time.sleep(self.config.pausa_entre_buscas)
             try:
@@ -102,6 +108,7 @@ class Verificador:
                 log.exception("Erro ao buscar %s em %s", monitor.rota, dia)
                 erros.append(f"{dia:%d/%m}: {e.__class__.__name__}: {e}")
                 continue
+            sucessos += 1
             if monitor.somente_diretos:
                 ofertas = [o for o in ofertas if o.paradas == 0]
             for oferta in ofertas:
