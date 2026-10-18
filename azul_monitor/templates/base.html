@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Monitor Azul{% endblock %}</title>
+  <style>
+    :root {
+      --azul: #0b4fa3; --azul-claro: #e8f0fb; --texto: #1d2733; --suave: #5b6878;
+      --borda: #d7dee8; --fundo: #f5f7fa; --cartao: #fff; --verde: #137a3e; --verde-claro: #e3f4ea;
+      --vermelho: #b42318;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --azul: #6ea8ff; --azul-claro: #16263d; --texto: #e6ebf2; --suave: #9aa6b5;
+        --borda: #2c3542; --fundo: #11161d; --cartao: #19202a; --verde: #5fd08f; --verde-claro: #15301f;
+        --vermelho: #ff8a80;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+           background: var(--fundo); color: var(--texto); }
+    header { background: var(--azul); color: #fff; padding: 14px 16px; }
+    @media (prefers-color-scheme: dark) { header { background: #0b2c57; } }
+    header a { color: #fff; text-decoration: none; font-weight: 600; font-size: 18px; }
+    main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 48px; }
+    h1 { font-size: 22px; margin: 0 0 4px; } h2 { font-size: 17px; margin: 28px 0 10px; }
+    .cartao { background: var(--cartao); border: 1px solid var(--borda); border-radius: 10px; padding: 16px; }
+    .suave { color: var(--suave); font-size: 13px; }
+    .grade { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+    label { display: block; font-size: 13px; color: var(--suave); margin-bottom: 4px; }
+    input, select { width: 100%; padding: 8px 10px; border: 1px solid var(--borda); border-radius: 6px;
+                    background: var(--cartao); color: var(--texto); font: inherit; }
+    input[type=checkbox] { width: auto; }
+    button { background: var(--azul); color: #fff; border: 0; border-radius: 6px; padding: 8px 14px;
+             font: inherit; font-weight: 600; cursor: pointer; }
+    @media (prefers-color-scheme: dark) { button { color: #0b1626; } }
+    button.sec { background: transparent; color: var(--azul); border: 1px solid var(--borda); font-weight: 500; }
+    button.perigo { background: transparent; color: var(--vermelho); border: 1px solid var(--borda); font-weight: 500; }
+    .tabela { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; background: var(--cartao); }
+    th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--borda); white-space: nowrap; }
+    th { font-size: 12px; text-transform: uppercase; letter-spacing: .03em; color: var(--suave); font-weight: 600; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .selo { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+    .selo.ok { background: var(--verde-claro); color: var(--verde); }
+    .selo.off { background: var(--azul-claro); color: var(--suave); }
+    .erro { color: var(--vermelho); }
+    .aviso { background: var(--azul-claro); border-radius: 8px; padding: 10px 14px; margin: 12px 0; font-size: 14px; }
+    .acoes { display: flex; gap: 6px; flex-wrap: wrap; } .acoes form { margin: 0; }
+    a { color: var(--azul); }
+  </style>
+</head>
+<body>
+  <header><a href="/">✈ Monitor Azul · pontos</a></header>
+  <main>{% block conteudo %}{% endblock %}</main>
+</body>
+</html>

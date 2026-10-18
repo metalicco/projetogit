@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block titulo %}{{ m.origem }}–{{ m.destino }} · Monitor Azul{% endblock %}
+{% block conteudo %}
+<h1>{{ m.rota }}</h1>
+<p class="suave">{{ m.data_inicio|br }} a {{ m.data_fim|br }}
+  · alerta até {{ m.max_pontos|pts }} pontos ou {{ m.desconto_minimo_pct|round|int }}% abaixo da média
+  · {{ "só diretos · " if m.somente_diretos else "" }}última verificação: {{ m.ultima_verificacao|brdt }}</p>
+{% if m.ultimo_erro %}<p class="erro">⚠ {{ m.ultimo_erro }}</p>{% endif %}
+<form method="post" action="/monitores/{{ m.id }}/verificar"><button>Verificar agora</button>
+  <span class="suave">A verificação roda em segundo plano; recarregue a página em alguns instantes.</span></form>
+
+{% if historico|length > 1 %}
+<h2>Menor preço encontrado em cada verificação</h2>
+{% set valores = historico|map(attribute="pontos")|list %}
+{% set lo, hi = valores|min, valores|max %}
+{% set faixa = (hi - lo) or 1 %}
+{% set n = valores|length %}
+<div class="cartao">
+  <svg viewBox="0 0 600 140" width="100%" style="display:block;max-height:220px" preserveAspectRatio="none" role="img" aria-label="Evolução do menor preço">
+    <polyline fill="none" stroke="var(--azul)" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"
+      points="{% for v in valores %}{{ 10 + loop.index0 * 580 / (n - 1) }},{{ 125 - (v - lo) * 110 / faixa }} {% endfor %}"/>
+    {% for v in valores %}<circle cx="{{ 10 + loop.index0 * 580 / (n - 1) }}" cy="{{ 125 - (v - lo) * 110 / faixa }}" r="3" fill="var(--azul)" vector-effect="non-scaling-stroke"><title>{{ historico[loop.index0].coletado_em|brdt }}: {{ v|pts }} pontos</title></circle>{% endfor %}
+  </svg>
+  <p class="suave" style="margin:4px 0 0">mín. {{ lo|pts }} · máx. {{ hi|pts }} pontos · {{ n }} verificações</p>
+</div>
+{% endif %}
+
+<h2>Melhor preço por data (última verificação)</h2>
+{% if melhores %}
+<div class="tabela"><table>
+  <tr><th>Data</th><th>Voo</th><th>Horário</th><th>Paradas</th><th class="num">Pontos</th><th class="num">Taxas</th><th class="num">Menor já visto</th></tr>
+  {% set menor_geral = melhores|map(attribute="pontos")|min %}
+  {% for p in melhores %}
+  <tr>
+    <td>{{ p.data_voo[8:10] }}/{{ p.data_voo[5:7] }}/{{ p.data_voo[:4] }}</td>
+    <td>{{ p.voo }}</td>
+    <td>{{ p.partida or "—" }} → {{ p.chegada or "—" }}</td>
+    <td>{{ "direto" if p.paradas == 0 else p.paradas }}</td>
+    <td class="num"><strong>{{ p.pontos|pts }}</strong>{% if p.pontos == menor_geral %} <span class="selo ok">menor</span>{% endif %}</td>
+    <td class="num">{{ "R$ %.2f"|format(p.taxas) if p.taxas else "—" }}</td>
+    <td class="num">{{ p.minimo_historico|pts }}</td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="suave">Ainda sem preços. Aguarde a primeira verificação.</p>
+{% endif %}
+
+<h2>Alertas deste monitor</h2>
+{% if alertas %}
+<div class="tabela"><table>
+  <tr><th>Quando</th><th>Data do voo</th><th>Voo</th><th class="num">Pontos</th><th>Motivo</th></tr>
+  {% for a in alertas %}
+  <tr><td>{{ a.criado_em|brdt }}</td><td>{{ a.data_voo[8:10] }}/{{ a.data_voo[5:7] }}/{{ a.data_voo[:4] }}</td>
+    <td>{{ a.voo }}</td><td class="num"><strong>{{ a.pontos|pts }}</strong></td><td>{{ a.motivo }}</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="suave">Nenhum alerta ainda.</p>
+{% endif %}
+{% endblock %}

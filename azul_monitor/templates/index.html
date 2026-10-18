@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1>Passagens Azul com pontos</h1>
+<p class="suave">Cadastre a rota e o período. A aplicação consulta os preços em pontos de cada data automaticamente
+  e avisa quando aparecer um bom preço.</p>
+
+{% if provedor == "simulado" %}
+<div class="aviso">Modo <strong>simulado</strong>: os preços são fictícios. Use <code>AZUL_PROVEDOR=azul</code> para consultar o site da Azul.</div>
+{% endif %}
+{% if erro %}<p class="erro"><strong>{{ erro }}</strong></p>{% endif %}
+
+<h2>Novo monitor</h2>
+<form class="cartao" method="post" action="/monitores">
+  <div class="grade">
+    <div><label for="origem">Origem (IATA)</label>
+      <input id="origem" name="origem" maxlength="3" placeholder="VCP" required></div>
+    <div><label for="destino">Destino (IATA)</label>
+      <input id="destino" name="destino" maxlength="3" placeholder="REC" required></div>
+    <div><label for="data_inicio">Ida a partir de</label>
+      <input id="data_inicio" type="date" name="data_inicio" min="{{ hoje }}" required></div>
+    <div><label for="data_fim">Até</label>
+      <input id="data_fim" type="date" name="data_fim" min="{{ hoje }}" required></div>
+  </div>
+  <div class="grade" style="margin-top:12px">
+    <div><label for="max_pontos">Alertar se custar até (pontos)</label>
+      <input id="max_pontos" name="max_pontos" inputmode="numeric" placeholder="ex.: 15000"></div>
+    <div><label for="desconto">Ou se estiver X% abaixo da média</label>
+      <input id="desconto" type="number" name="desconto_minimo_pct" value="20" min="0" max="90"></div>
+    <div><label for="intervalo">Verificar a cada</label>
+      <select id="intervalo" name="intervalo_minutos">
+        <option value="60">1 hora</option><option value="180" selected>3 horas</option>
+        <option value="360">6 horas</option><option value="720">12 horas</option><option value="1440">1 dia</option>
+      </select></div>
+    <div><label>&nbsp;</label>
+      <label style="display:flex;gap:6px;align-items:center;color:inherit;font-size:14px">
+        <input type="checkbox" name="somente_diretos" value="true"> Só voos diretos</label></div>
+  </div>
+  <p class="suave">Até {{ max_dias }} dias por monitor. Cada data é uma busca no site, então períodos menores são verificados mais rápido.</p>
+  <button type="submit">Começar a monitorar</button>
+</form>
+
+<h2>Monitores</h2>
+{% if monitores %}
+<div class="tabela"><table>
+  <tr><th>Rota</th><th>Período</th><th class="num">Limite</th><th>Frequência</th><th>Última verificação</th><th>Status</th><th></th></tr>
+  {% for m in monitores %}
+  <tr>
+    <td><a href="/monitores/{{ m.id }}"><strong>{{ m.rota }}</strong></a>{% if m.somente_diretos %} <span class="suave">diretos</span>{% endif %}</td>
+    <td>{{ m.data_inicio|br }} – {{ m.data_fim|br }}</td>
+    <td class="num">{{ m.max_pontos|pts }}</td>
+    <td>{{ "%d h"|format(m.intervalo_minutos // 60) if m.intervalo_minutos % 60 == 0 else "%d min"|format(m.intervalo_minutos) }}</td>
+    <td>{{ m.ultima_verificacao|brdt }}
+      {% if m.ultimo_erro %}<span class="erro" title="{{ m.ultimo_erro }}">⚠</span>{% endif %}</td>
+    <td>{% if m.ativo %}<span class="selo ok">ativo</span>{% else %}<span class="selo off">pausado</span>{% endif %}</td>
+    <td><div class="acoes">
+      <form method="post" action="/monitores/{{ m.id }}/alternar"><button class="sec">{{ "Pausar" if m.ativo else "Retomar" }}</button></form>
+      <form method="post" action="/monitores/{{ m.id }}/excluir" onsubmit="return confirm('Excluir este monitor e seu histórico?')"><button class="perigo">Excluir</button></form>
+    </div></td>
+  </tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="suave">Nenhum monitor ainda.</p>
+{% endif %}
+
+<h2>Alertas recentes</h2>
+{% if alertas %}
+<div class="tabela"><table>
+  <tr><th>Quando</th><th>Rota</th><th>Data do voo</th><th>Voo</th><th class="num">Pontos</th><th>Motivo</th></tr>
+  {% for a in alertas %}
+  <tr><td>{{ a.criado_em|brdt }}</td><td>{{ a.origem }} → {{ a.destino }}</td><td>{{ a.data_voo[8:10] }}/{{ a.data_voo[5:7] }}/{{ a.data_voo[:4] }}</td>
+    <td>{{ a.voo }}</td><td class="num"><strong>{{ a.pontos|pts }}</strong></td><td>{{ a.motivo }}</td></tr>
+  {% endfor %}
+</table></div>
+{% else %}
+<p class="suave">Nenhum alerta ainda.</p>
+{% endif %}
+
+<h2>Canais de alerta</h2>
+<form class="cartao acoes" method="post" action="/testar-alerta" style="align-items:center;justify-content:space-between">
+  <span>Ativos: {% for c in canais %}<span class="selo ok">{{ c }}</span> {% endfor %}
+    <span class="suave">— configure Telegram, e-mail ou ntfy no arquivo <code>.env</code>.</span></span>
+  <button class="sec">Enviar alerta de teste</button>
+</form>
+{% endblock %}
