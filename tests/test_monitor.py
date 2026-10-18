@@ -174,3 +174,25 @@ def test_web_fluxo_completo(tmp_path):
 
         cliente.post("/monitores/1/excluir")
         assert app.state.db.obter_monitor(1) is None
+
+
+def test_sincronizar_monitores(db):
+    defs = [{"origem": "vcp", "destino": "rec", "data_inicio": "2026-12-15", "data_fim": "2026-12-22",
+             "max_pontos": 15000}]
+    (m,) = db.sincronizar_monitores(defs)
+    assert m.origem == "VCP" and m.max_pontos == 15000 and m.ativo
+    defs[0]["max_pontos"] = 12000
+    (m2,) = db.sincronizar_monitores(defs)
+    assert m2.id == m.id and m2.max_pontos == 12000
+    db.sincronizar_monitores([])
+    assert db.listar_monitores(somente_ativos=True) == []
+    assert db.obter_monitor(m.id) is not None  # pausado, não excluído
+
+
+def test_relatorio(tmp_path, db):
+    m = novo_monitor(db, max_pontos=10000)
+    Verificador(db, ProvedorFixo({HOJE: [9000, 12000]}), NotificadorFalso(), config(tmp_path)).verificar(m)
+    from azul_monitor.relatorio import gerar_relatorio
+
+    texto = gerar_relatorio(db)
+    assert "## VCP → REC" in texto and "**9.000** 🏆" in texto and "Alertas recentes" in texto

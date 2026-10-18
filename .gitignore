@@ -3,5 +3,6 @@ __pycache__/
 .venv/
 .env
 *.db
+!dados/azul_monitor.db
 debug/
 .pytest_cache/

@@ -3,17 +3,22 @@
     python -m azul_monitor servir            # interface web + verificações automáticas
     python -m azul_monitor buscar VCP REC 2026-12-20
     python -m azul_monitor verificar         # verifica todos os monitores ativos uma vez
+    python -m azul_monitor verificar --arquivo monitores.json
+    python -m azul_monitor relatorio --saida RELATORIO.md
 """
 
 import argparse
+import json
 import logging
 from datetime import date
+from pathlib import Path
 
 from .alertas import Notificador
 from .config import carregar_config
 from .db import Database
 from .monitor import Verificador
 from .providers import criar_provedor
+from .relatorio import gerar_relatorio
 
 
 def main() -> None:
@@ -29,7 +34,13 @@ def main() -> None:
     p_buscar.add_argument("destino")
     p_buscar.add_argument("data", type=date.fromisoformat, help="AAAA-MM-DD")
 
-    sub.add_parser("verificar", help="Verifica todos os monitores ativos agora")
+    p_verificar = sub.add_parser("verificar", help="Verifica todos os monitores ativos agora")
+    p_verificar.add_argument(
+        "--arquivo", help="JSON com a lista de monitores (substitui os monitores ativos do banco)"
+    )
+
+    p_relatorio = sub.add_parser("relatorio", help="Gera um relatório em Markdown")
+    p_relatorio.add_argument("--saida", help="Arquivo de saída (padrão: imprime na tela)")
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -55,6 +66,9 @@ def main() -> None:
                   f"paradas={o.paradas}  {o.pontos:>8,} pontos{taxas}".replace(",", "."))
     elif args.comando == "verificar":
         db = Database(config.db_path)
+        if args.arquivo:
+            with open(args.arquivo, encoding="utf-8") as f:
+                db.sincronizar_monitores(json.load(f))
         provedor = criar_provedor(config)
         try:
             verificador = Verificador(db, provedor, Notificador(config), config)
@@ -62,6 +76,12 @@ def main() -> None:
                 verificador.verificar(monitor)
         finally:
             provedor.fechar()
+    elif args.comando == "relatorio":
+        texto = gerar_relatorio(Database(config.db_path))
+        if args.saida:
+            Path(args.saida).write_text(texto, encoding="utf-8")
+        else:
+            print(texto)
 
 
 if __name__ == "__main__":

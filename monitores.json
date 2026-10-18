@@ -1,0 +1,11 @@
+[
+  {
+    "origem": "VCP",
+    "destino": "REC",
+    "data_inicio": "2026-12-15",
+    "data_fim": "2026-12-22",
+    "max_pontos": 15000,
+    "desconto_minimo_pct": 20,
+    "somente_diretos": false
+  }
+]

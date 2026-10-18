@@ -139,6 +139,43 @@ class Database:
         )
         return cur.lastrowid
 
+    def sincronizar_monitores(self, definicoes: list[dict]) -> list[Monitor]:
+        """Deixa ativos exatamente os monitores descritos em `definicoes`.
+
+        Um monitor é identificado por rota e período; os demais campos são atualizados.
+        Monitores fora da lista são pausados (não excluídos) para preservar o histórico.
+        """
+        ids = []
+        for d in definicoes:
+            origem, destino = d["origem"].upper().strip(), d["destino"].upper().strip()
+            inicio, fim = date.fromisoformat(d["data_inicio"]), date.fromisoformat(d["data_fim"])
+            regras = (
+                d.get("max_pontos"),
+                d.get("desconto_minimo_pct", 20),
+                int(d.get("somente_diretos", False)),
+            )
+            rows = self._all(
+                """SELECT id FROM monitores WHERE origem = ? AND destino = ?
+                   AND data_inicio = ? AND data_fim = ?""",
+                (origem, destino, inicio.isoformat(), fim.isoformat()),
+            )
+            if rows:
+                monitor_id = rows[0]["id"]
+                self._exec(
+                    """UPDATE monitores SET max_pontos = ?, desconto_minimo_pct = ?,
+                       somente_diretos = ?, ativo = 1 WHERE id = ?""",
+                    (*regras, monitor_id),
+                )
+            else:
+                monitor_id = self.criar_monitor(
+                    origem, destino, inicio, fim, max_pontos=regras[0],
+                    desconto_minimo_pct=regras[1], somente_diretos=bool(regras[2]),
+                )
+            ids.append(monitor_id)
+        marcadores = ",".join("?" * len(ids))
+        self._exec(f"UPDATE monitores SET ativo = 0 WHERE id NOT IN ({marcadores})", ids)
+        return [self.obter_monitor(i) for i in ids]
+
     def listar_monitores(self, somente_ativos: bool = False) -> list[Monitor]:
         sql = "SELECT * FROM monitores"
         if somente_ativos:
