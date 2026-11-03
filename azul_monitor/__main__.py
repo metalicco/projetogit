@@ -5,17 +5,20 @@
     python -m azul_monitor verificar         # verifica todos os monitores ativos uma vez
     python -m azul_monitor verificar --arquivo monitores.json
     python -m azul_monitor relatorio --saida RELATORIO.md
+    python -m azul_monitor escala            # gera as viagens a partir da escala de plantões
 """
 
 import argparse
 import json
 import logging
+import os
 from datetime import date
 from pathlib import Path
 
 from .alertas import Notificador
 from .config import carregar_config
 from .db import Database
+from .escala import atualizar_monitores, baixar_ics, calcular_viagens, ler_escala, rotas_das_viagens
 from .monitor import Verificador
 from .providers import criar_provedor
 from .relatorio import gerar_relatorio
@@ -53,6 +56,12 @@ def main() -> None:
 
     p_relatorio = sub.add_parser("relatorio", help="Gera um relatório em Markdown")
     p_relatorio.add_argument("--saida", help="Arquivo de saída (padrão: imprime na tela)")
+
+    p_escala = sub.add_parser("escala", help="Gera as rotas de ida e volta a partir da escala de plantões")
+    p_escala.add_argument("--arquivo", default="escala.json")
+    p_escala.add_argument("--monitores", default="monitores.json")
+    p_escala.add_argument("--viagens", default="dados/viagens.json", help="Resumo das viagens (para o relatório)")
+    p_escala.add_argument("--ics", help="Link ou arquivo .ics do calendário (padrão: CALENDARIO_ICS_URL)")
 
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -105,8 +114,36 @@ def main() -> None:
                 print(f"{n} rota(s) removida(s).")
         except ValueError as e:
             raise SystemExit(f"Erro: {e}")
+    elif args.comando == "escala":
+        escala = ler_escala(Path(args.arquivo))
+        fonte = args.ics or os.environ.get("CALENDARIO_ICS_URL") or escala.get("calendario_ics")
+        ics = None
+        if fonte:
+            try:
+                ics = Path(fonte).read_text(encoding="utf-8") if Path(fonte).is_file() else baixar_ics(fonte)
+            except Exception as e:
+                logging.error("Não consegui ler o calendário (%s); usando o ciclo do escala.json.", e)
+        viagens = calcular_viagens(escala, ics)
+        rotas = rotas_das_viagens(escala, viagens)
+        atualizar_monitores(Path(args.monitores), rotas)
+        resumo = {
+            "origem": escala["origem"].upper(), "destino": escala["destino"].upper(),
+            "fonte": "calendário" if ics else "ciclo do escala.json",
+            "viagens": [{"ida": v.ida.isoformat(), "volta": v.volta.isoformat(),
+                         "plantao_inicio": v.plantao_inicio.isoformat(),
+                         "plantao_fim": v.plantao_fim.isoformat()} for v in viagens],
+        }
+        Path(args.viagens).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.viagens).write_text(json.dumps(resumo, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        print(f"Plantões lidos do {resumo['fonte']}.")
+        for v in viagens:
+            print(f"Plantão {v.plantao_inicio:%d/%m}–{v.plantao_fim:%d/%m}: "
+                  f"ida {resumo['origem']}→{resumo['destino']} {v.ida:%d/%m}, "
+                  f"volta {resumo['destino']}→{resumo['origem']} {v.volta:%d/%m}")
+        if not viagens:
+            print("Nenhuma viagem encontrada no período.")
     elif args.comando == "relatorio":
-        texto = gerar_relatorio(Database(config.db_path))
+        texto = gerar_relatorio(Database(config.db_path), Path("dados/viagens.json"))
         if args.saida:
             Path(args.saida).write_text(texto, encoding="utf-8")
         else:

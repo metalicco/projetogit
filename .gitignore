@@ -6,3 +6,4 @@ __pycache__/
 !dados/azul_monitor.db
 debug/
 .pytest_cache/
+escala.txt

@@ -4,6 +4,10 @@ on:
   schedule:
     # A cada 3 horas (horário UTC; minuto 17 para fugir do pico do GitHub).
     - cron: "17 */3 * * *"
+  # Roda na hora quando você edita a escala (ex.: pelo app do GitHub no celular).
+  push:
+    paths:
+      - escala.json
   # Formulário do botão "Run workflow" na aba Actions.
   workflow_dispatch:
     inputs:
@@ -64,6 +68,7 @@ jobs:
       SMTP_USER: ${{ secrets.SMTP_USER }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       EMAIL_DESTINO: ${{ secrets.EMAIL_DESTINO }}
+      CALENDARIO_ICS_URL: ${{ secrets.CALENDARIO_ICS_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -101,6 +106,13 @@ jobs:
           echo '```json' >> "$GITHUB_STEP_SUMMARY"
           cat monitores.json >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Atualizar viagens da escala de plantões
+        if: hashFiles('escala.json') != ''
+        run: |
+          python -m azul_monitor escala --arquivo escala.json --monitores monitores.json | tee escala.txt
+          echo '### Viagens da escala' >> "$GITHUB_STEP_SUMMARY"
+          sed 's/^/- /' escala.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Verificar preços
         if: github.event_name != 'workflow_dispatch' || inputs.acao != 'Remover rota'

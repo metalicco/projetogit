@@ -1,0 +1,16 @@
+{
+  "origem": "REC",
+  "destino": "JDO",
+  "palavra_chave": "plantão",
+  "ciclo": {
+    "primeiro_plantao": "2026-11-05",
+    "dias_plantao": 5,
+    "repetir_a_cada_dias": 10
+  },
+  "plantoes": [],
+  "viagens_a_frente": 4,
+  "horizonte_dias": 60,
+  "max_pontos": null,
+  "desconto_minimo_pct": 20,
+  "somente_diretos": false
+}

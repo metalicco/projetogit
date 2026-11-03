@@ -53,6 +53,45 @@ AZUL_PROVEDOR=simulado python -m azul_monitor servir
 A aplicação precisa ficar rodando para monitorar. Deixe-a num computador sempre ligado, num
 servidor ou numa VPS, ou agende `python -m azul_monitor verificar` no cron.
 
+## Viagens da escala de plantões (REC ⇄ JDO)
+
+O arquivo `escala.json` gera sozinho as rotas de ida e volta a partir dos seus plantões:
+a **ida** (`origem` → `destino`) é no dia anterior ao primeiro dia de plantão, e a **volta**
+no dia seguinte ao último. Ex.: plantão de 05/11 a 09/11 → ida REC→JDO em 04/11, volta
+JDO→REC em 10/11.
+
+De onde vêm os dias de plantão:
+
+1. **Do seu calendário (recomendado).** Salve o link iCal do calendário como secret
+   `CALENDARIO_ICS_URL` (*Settings → Secrets and variables → Actions*). Contam como plantão os
+   eventos cujo título contém `palavra_chave` (padrão `plantão`; maiúsculas e acentos não
+   importam). Eventos de dia inteiro, com horário e recorrentes funcionam. Um plantão com horário
+   que termina antes do meio-dia (ex.: 7h às 7h) não conta o dia seguinte.
+   - **Google Agenda:** no navegador, *Configurações → (sua agenda) → Integrar agenda →
+     Endereço secreto no formato iCal*.
+   - **iPhone (iCloud):** app Calendário → *Calendários* → ⓘ do calendário → ative
+     *Calendário Público* → *Compartilhar Link*.
+   Quando o calendário está configurado, o `ciclo` é ignorado.
+2. **Do ciclo** em `escala.json` (usado se não houver calendário): `primeiro_plantao`,
+   `dias_plantao` (5) e `repetir_a_cada_dias` (10).
+3. **Da lista `plantoes`**, para incluir blocos avulsos: `[{"inicio": "2026-12-20", "fim": "2026-12-24"}]`.
+
+A cada execução as rotas da escala em `monitores.json` são recalculadas (marcadas com
+`"escala": true`; as rotas cadastradas à mão continuam). São monitoradas as próximas
+`viagens_a_frente` viagens dentro de `horizonte_dias`. O relatório mostra no topo a tabela
+**Próximas viagens** com o melhor preço da ida e da volta de cada plantão.
+
+Comando local: `python -m azul_monitor escala` (aceita `--ics arquivo.ics` ou um link).
+
+### No celular
+
+- **Alertas:** instale o app [ntfy](https://ntfy.sh), assine um tópico com nome difícil de
+  adivinhar e salve o mesmo nome no secret `NTFY_TOPIC`. (Ou use Telegram.)
+- **Preços:** no app do GitHub, abra o repositório → `dados/RELATORIO.md`.
+- **Mudar a escala:** edite `escala.json` pelo app/site do GitHub; ao salvar, o monitor roda na
+  hora. Para forçar uma verificação, *Actions → Monitor de passagens Azul → Run workflow →
+  Só verificar os preços*.
+
 ## Rodar no GitHub (sem computador ligado)
 
 O workflow `.github/workflows/monitor.yml` roda a verificação no GitHub Actions a cada 3
@@ -130,11 +169,13 @@ azul_monitor/
   alertas.py         Telegram, e-mail, ntfy
   relatorio.py       relatório em Markdown (usado no GitHub)
   rotas.py           edição de monitores.json (formulário do GitHub)
+  escala.py          plantões (calendário/ciclo) → viagens de ida e volta
   db.py              SQLite: monitores, histórico de preços, alertas
   providers/
     azul.py          consulta ao site da Azul (Playwright)
     simulado.py      preços fictícios para testes
 tests/
+escala.json          escala de plantões e rota casa ⇄ trabalho
 monitores.json       rotas monitoradas no GitHub Actions
 .github/workflows/   agendamento no GitHub Actions
 ```
