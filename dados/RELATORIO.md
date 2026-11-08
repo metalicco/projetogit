@@ -1,6 +1,6 @@
 # Passagens Azul com pontos
 
-Atualizado em 07/11/2026 16:27 (horário do servidor).
+Atualizado em 07/11/2026 21:39 (horário do servidor).
 
 ## VCP → REC
 
